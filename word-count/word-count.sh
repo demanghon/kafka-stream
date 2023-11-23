@@ -25,7 +25,7 @@ bin/kafka-console-producer.sh --bootstrap-server localhost:9092 --topic word-cou
 mvn clean package
 
 # run your fat jar
-java -jar <your jar here>.jar
+java -jar ./target/word-count-1.0-SNAPSHOT-jar-with-dependencies.jar
 
 # list all topics that we have in Kafka (so we can observe the internal topics)
 kafka-topics.sh --list --bootstrap-server localhost:9092

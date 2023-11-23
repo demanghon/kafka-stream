@@ -20,6 +20,7 @@ public class WordCountApp {
         StreamsBuilder builder = new StreamsBuilder();
         // 1 - stream from Kafka
 
+        
         KStream<String, String> textLines = builder.stream("word-count-input");
         KTable<String, Long> wordCounts = textLines
                 // 2 - map values to lowercase
@@ -36,6 +37,7 @@ public class WordCountApp {
                 .count(Materialized.as("Counts"));
 
         // 7 - to in order to write the results back to kafka
+        System.out.println("world count results: " + wordCounts.toString());
         wordCounts.toStream().to("word-count-output", Produced.with(Serdes.String(), Serdes.Long()));
 
         return builder.build();
@@ -60,7 +62,7 @@ public class WordCountApp {
         // Update:
         // print the topology every 10 seconds for learning purposes
         while(true){
-            streams.localThreadsMetadata().forEach(data -> System.out.println(data));
+            streams.metadataForLocalThreads().forEach(data -> System.out.println(data));
             try {
                 Thread.sleep(5000);
             } catch (InterruptedException e) {

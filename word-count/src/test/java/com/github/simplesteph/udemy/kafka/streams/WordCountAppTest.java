@@ -5,30 +5,35 @@ import org.apache.kafka.common.serialization.LongDeserializer;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
+import org.apache.kafka.common.serialization.Serdes.LongSerde;
+import org.apache.kafka.common.serialization.Serdes.StringSerde;
+import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.TestInputTopic;
+import org.apache.kafka.streams.TestOutputTopic;
 import org.apache.kafka.streams.Topology;
 import org.apache.kafka.streams.TopologyTestDriver;
-import org.apache.kafka.streams.test.ConsumerRecordFactory;
-import org.apache.kafka.streams.test.OutputVerifier;
-import org.junit.After;
-import org.junit.Before;
-import org.junit.Test;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.Assertions;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
 import java.util.Properties;
-
-import static org.junit.Assert.assertEquals;
 
 public class WordCountAppTest {
 
     TopologyTestDriver testDriver;
 
-    StringSerializer stringSerializer = new StringSerializer();
+    StringSerde stringSerde = new StringSerde();
+    LongSerde longSerde = new LongSerde();
 
-    ConsumerRecordFactory<String, String> recordFactory =
-             new ConsumerRecordFactory<>(stringSerializer, stringSerializer);
+    TestInputTopic<String, String> inputTopic;
+    TestOutputTopic<String, Long> outputTopic;
 
 
-    @Before
+    @BeforeEach
     public void setUpTopologyTestDriver(){
         Properties config = new Properties();
         config.put(StreamsConfig.APPLICATION_ID_CONFIG, "test");
@@ -39,15 +44,18 @@ public class WordCountAppTest {
         WordCountApp wordCountApp = new WordCountApp();
         Topology topology = wordCountApp.createTopology();
         testDriver = new TopologyTestDriver(topology, config);
+
+        inputTopic = testDriver.createInputTopic("word-count-input", stringSerde.serializer(), stringSerde.serializer());
+        outputTopic = testDriver.createOutputTopic("word-count-output", stringSerde.deserializer(), longSerde.deserializer());
     }
 
-    @After
+    @AfterEach
     public void closeTestDriver(){
         testDriver.close();
     }
 
     public void pushNewInputRecord(String value){
-        testDriver.pipeInput(recordFactory.create("word-count-input", null, value));
+        inputTopic.pipeInput(null, value);
     }
 
     @Test
@@ -56,24 +64,20 @@ public class WordCountAppTest {
         assertEquals(dummy, "Dummy");
     }
 
-    public ProducerRecord<String, Long> readOutput(){
-        return testDriver.readOutput("word-count-output", new StringDeserializer(), new LongDeserializer());
-    }
-
     @Test
     public void makeSureCountsAreCorrect(){
         String firstExample = "testing Kafka Streams";
         pushNewInputRecord(firstExample);
-        OutputVerifier.compareKeyValue(readOutput(), "testing", 1L);
-        OutputVerifier.compareKeyValue(readOutput(), "kafka", 1L);
-        OutputVerifier.compareKeyValue(readOutput(), "streams", 1L);
-        assertEquals(readOutput(), null);
+        assertEquals(outputTopic.readKeyValue(),  new KeyValue<>("testing", 1L));
+        assertEquals(outputTopic.readKeyValue(),  new KeyValue<>("kafka", 1L));
+        assertEquals(outputTopic.readKeyValue(),  new KeyValue<>("streams", 1L));
 
         String secondExample = "testing Kafka again";
         pushNewInputRecord(secondExample);
-        OutputVerifier.compareKeyValue(readOutput(), "testing", 2L);
-        OutputVerifier.compareKeyValue(readOutput(), "kafka", 2L);
-        OutputVerifier.compareKeyValue(readOutput(), "again", 1L);
+        assertEquals(outputTopic.readKeyValue(),  new KeyValue<>("testing", 2L));
+        assertEquals(outputTopic.readKeyValue(),  new KeyValue<>("kafka", 2L));
+        assertEquals(outputTopic.readKeyValue(),  new KeyValue<>("again", 1L));
+        assertEquals(outputTopic.isEmpty(), true);
 
     }
 
@@ -81,9 +85,9 @@ public class WordCountAppTest {
     public void makeSureWordsBecomeLowercase(){
         String upperCaseString = "KAFKA kafka Kafka";
         pushNewInputRecord(upperCaseString);
-        OutputVerifier.compareKeyValue(readOutput(), "kafka", 1L);
-        OutputVerifier.compareKeyValue(readOutput(), "kafka", 2L);
-        OutputVerifier.compareKeyValue(readOutput(), "kafka", 3L);
-
+        assertEquals(outputTopic.readKeyValue(),  new KeyValue<>("kafka", 1L));
+        assertEquals(outputTopic.readKeyValue(),  new KeyValue<>("kafka", 2L));
+        assertEquals(outputTopic.readKeyValue(),  new KeyValue<>("kafka", 3L));
+        assertEquals(outputTopic.isEmpty(), true);
     }
 }
